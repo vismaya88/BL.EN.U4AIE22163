@@ -3,6 +3,18 @@ require('dotenv').config();
 
 let accessToken = null;
 
+// Helper to calculate mean
+const calculateMean = (prices) => prices.reduce((a, b) => a + b, 0) / prices.length;
+
+// Helper to calculate covariance
+const calculateCovariance = (X, Y, meanX, meanY) => {
+  return X.reduce((sum, xi, i) => sum + (xi - meanX) * (Y[i] - meanY), 0) / (X.length - 1);
+};
+
+// Helper to calculate standard deviation
+const calculateStdDev = (prices, mean) => Math.sqrt(prices.reduce((sum, xi) => sum + Math.pow(xi - mean, 2), 0) / (prices.length - 1));
+
+// Authenticate to get the access token
 const authenticate = async () => {
   if (accessToken) return accessToken;
 
@@ -19,6 +31,7 @@ const authenticate = async () => {
   return accessToken;
 };
 
+// Fetch stock price history
 const getPriceHistory = async (ticker, minutes) => {
   const token = await authenticate();
   const url = `http://20.244.56.144/evaluation-service/stocks/${ticker}?minutes=${minutes}`;
@@ -28,19 +41,21 @@ const getPriceHistory = async (ticker, minutes) => {
   return data;
 };
 
+// Get average price of stock
 const getAveragePrice = async (req, res) => {
   try {
     const { ticker } = req.params;
     const { minutes } = req.query;
     const data = await getPriceHistory(ticker, minutes);
     const prices = data.map(d => d.price);
-    const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+    const avg = calculateMean(prices);
     res.json({ averageStockPrice: avg, priceHistory: data });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
+// Get correlation between two stock prices
 const getStockCorrelation = async (req, res) => {
   try {
     const { minutes, ticker: tickers } = req.query;
@@ -58,12 +73,12 @@ const getStockCorrelation = async (req, res) => {
     const X = prices1.slice(0, minLength);
     const Y = prices2.slice(0, minLength);
 
-    const meanX = X.reduce((a, b) => a + b, 0) / X.length;
-    const meanY = Y.reduce((a, b) => a + b, 0) / Y.length;
+    const meanX = calculateMean(X);
+    const meanY = calculateMean(Y);
 
-    const covariance = X.reduce((sum, xi, i) => sum + (xi - meanX) * (Y[i] - meanY), 0) / (X.length - 1);
-    const stdX = Math.sqrt(X.reduce((sum, xi) => sum + Math.pow(xi - meanX, 2), 0) / (X.length - 1));
-    const stdY = Math.sqrt(Y.reduce((sum, yi) => sum + Math.pow(yi - meanY, 2), 0) / (Y.length - 1));
+    const covariance = calculateCovariance(X, Y, meanX, meanY);
+    const stdX = calculateStdDev(X, meanX);
+    const stdY = calculateStdDev(Y, meanY);
 
     const correlation = covariance / (stdX * stdY);
 
